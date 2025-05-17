@@ -3,27 +3,23 @@ import os
 import subprocess
 import platform
 import tempfile
-from PIL import Image
 
 def ensure_pefile_installed():
-    pefile_path = os.path.join(os.path.dirname(__file__), "pefile")
-    sys.path.insert(0, pefile_path)
     try:
         global pefile
         import pefile
     except ImportError:
-        print("[*] 'pefile' not found locally. Attempting to install it...")
+        print("[*] 'pefile' not found. Attempting to install it...")
         try:
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "pefile", f"--target={pefile_path}"],
+                [sys.executable, "-m", "pip", "install", "pefile"],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-            sys.path.insert(0, pefile_path)
             import pefile
         except Exception:
-            print("[!] Failed to install 'pefile'. Please install it manually.")
+            print("[!] Failed to install 'pefile'. Please install it manually: pip install pefile")
             sys.exit(1)
 
 def ensure_pillow_installed():
@@ -31,10 +27,14 @@ def ensure_pillow_installed():
         global Image
         from PIL import Image
     except ImportError:
-        print("[*] 'Pillow' not found. Installing...")
+        print("[*] 'Pillow' not found. Attempting to install it...")
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "Pillow"], check=True,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "Pillow"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
             from PIL import Image
         except Exception:
             print("[!] Failed to install 'Pillow'. Please install it manually: pip install Pillow")
