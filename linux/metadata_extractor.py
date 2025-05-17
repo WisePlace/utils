@@ -207,7 +207,7 @@ def main():
     print("[*] Extracting icon...")
     icon_filename = extract_icon(exe_path, output_dir, base_name)
     if not icon_filename:
-        print("[!] No icon was extracted.")
+        print("[!] Failed to extract icon. Continuing without icon...")
 
     print("[*] Extracting version info...")
     version_info = extract_version_info(exe_path)
@@ -217,9 +217,9 @@ def main():
     generate_rc_file(icon_filename, version_info, rc_path)
 
     print(f"[+] Done! Files saved to '{output_dir}'")
-    print(f"    ├── {icon_filename}")
+    if icon_filename:
+        print(f"    ├── {icon_filename}")
     print(f"    └── {base_name}.rc")
-
 
 if __name__ == "__main__":
     main()
