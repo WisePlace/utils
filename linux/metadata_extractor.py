@@ -115,13 +115,31 @@ def extract_icon(exe_path, output_dir, base_name):
         return os.path.basename(icon_path)
 
     else:
-        subprocess.run(["wrestool", "-x", "--type=14", "-o", output_dir, exe_path], check=True)
+        try:
+            result = subprocess.run(
+                ["wrestool", "-x", "--type=14", "-o", output_dir, exe_path],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+        except subprocess.CalledProcessError as e:
+            print("[!] wrestool failed:")
+            print(e.stderr.decode())
+            return None
+        
+        found_icon = False
         for f in os.listdir(output_dir):
-            if f.endswith(".ico"):
+            if f.lower().endswith(".ico"):
                 src_icon = os.path.join(output_dir, f)
                 dest_icon = get_unique_filename(base_name, ".ico", output_dir)
-                os.rename(src_icon, dest_icon)
-                return os.path.basename(dest_icon)
+                try:
+                    os.rename(src_icon, dest_icon)
+                    return os.path.basename(dest_icon)
+                except Exception as e:
+                    print(f"[!] Failed to rename extracted icon: {e}")
+                    return None
+        if not found_icon:
+            print("[!] No .ico file found in the target.")
         return None
 
 def extract_version_info(exe_path):
