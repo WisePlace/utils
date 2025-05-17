@@ -1,10 +1,8 @@
-1 ICON "../icons/notepad.ico"
+IDI_ICON1 ICON "../icons/notepad.ico"
 
 1 VERSIONINFO
-FILEVERSION 10,0,19041,1
-PRODUCTVERSION 10,0,19041,1
-FILEOS 0x4
-FILETYPE 0x1
+FILEVERSION 10,0,19041,5794
+PRODUCTVERSION 10,0,19041,5794
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
@@ -12,15 +10,16 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Microsoft Corporation"
       VALUE "FileDescription", "Notepad"
-      VALUE "FileVersion", "10.0.19041.1"
-      VALUE "InternalName", "notepad.exe"
-      VALUE "OriginalFilename", "notepad.exe"
+      VALUE "FileVersion", "10.0.19041.5794 (WinBuild.160101.0800)"
+      VALUE "InternalName", "Notepad"
+      VALUE "LegalCopyright", "Microsoft Corporation. All rights reserved."
+      VALUE "OriginalFilename", "NOTEPAD.EXE"
       VALUE "ProductName", "Microsoft Windows Operating System"
-      VALUE "ProductVersion", "10.0.19041.1"
+      VALUE "ProductVersion", "10.0.19041.5794"
     END
   END
   BLOCK "VarFileInfo"
   BEGIN
-    VALUE "Translation", 0x0409, 1200
+    VALUE "Translation", 0x409, 1200
   END
 END
