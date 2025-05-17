@@ -129,7 +129,7 @@ sign_payload() {
   echo -e "${BLUE}${PREFIX} Signing executable...${NC}"
   if osslsigncode sign -pkcs12 anon_cert.pfx -pass "" -n "Anonymous App" -i "https://anonymous.url" \
       -t "http://timestamp.sectigo.com" -in "$OUTPUT" -out "$SIGNED_OUTPUT" &>/dev/null; then
-    echo -e "${GREEN}${PREFIX} Signed executable created: ${WHITE}${SIGNED_OUTPUT}${NC}"
+    echo -e "${GREEN}${PREFIX} Signed executable created: ${WHITE}${OUTPUT}${NC}"
     mv "$SIGNED_OUTPUT" "$OUTPUT"
   else
     echo -e "${RED}${PREFIX} Signing failed.${NC}"
