@@ -2,6 +2,8 @@ import sys
 import os
 import subprocess
 import platform
+import tempfile
+from PIL import Image
 
 def ensure_pefile_installed():
     pefile_path = os.path.join(os.path.dirname(__file__), "pefile")
@@ -26,7 +28,6 @@ def ensure_pefile_installed():
 
 def check_icoutils():
     if platform.system() != "Linux":
-        print("[!] icoutils auto-install only supported on Linux.")
         return
     try:
         subprocess.run(["icotool", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -45,19 +46,77 @@ def get_unique_filename(base_name, ext, output_dir):
         i += 1
 
 def extract_icon(exe_path, output_dir, base_name):
-    subprocess.run(["wrestool", "-x", "--type=14", "-o", output_dir, exe_path], check=True)
-    for f in os.listdir(output_dir):
-        if f.endswith(".ico"):
-            src_icon = os.path.join(output_dir, f)
-            dest_icon = get_unique_filename(base_name, ".ico", output_dir)
-            os.rename(src_icon, dest_icon)
-            return os.path.basename(dest_icon)
-    return None
+    if platform.system() == "Windows":
+        try:
+            import win32api
+            import win32con
+            import win32gui
+            import win32ui
+        except ImportError:
+            print("[*] 'pywin32' not found. Attempting to install it...")
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "pywin32"], check=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                import win32api
+                import win32con
+                import win32gui
+                import win32ui
+            except Exception:
+                print("[!] Failed to install 'pywin32'. Please install it manually: pip install pywin32")
+                sys.exit(1)
+
+        try:
+            from PIL import Image
+        except ImportError:
+            print("[*] 'Pillow' not found. Installing...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "Pillow"], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            from PIL import Image
+
+        large, small = win32gui.ExtractIconEx(exe_path, 0)
+        if not large:
+            print("[!] No icon found in the executable.")
+            return None
+
+        icon_path = get_unique_filename(base_name, ".ico", output_dir)
+
+        ico_x = win32api.GetSystemMetrics(win32con.SM_CXICON)
+        hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
+        hbmp = win32ui.CreateBitmap()
+        hbmp.CreateCompatibleBitmap(hdc, ico_x, ico_x)
+        hdc = hdc.CreateCompatibleDC()
+        hdc.SelectObject(hbmp)
+
+        icon_handle = large[0].Handle if hasattr(large[0], "Handle") else large[0]
+        win32gui.DrawIconEx(hdc.GetHandleOutput(), 0, 0, icon_handle, ico_x, ico_x, 0, None, win32con.DI_NORMAL)
+
+        temp_bmp = os.path.join(tempfile.gettempdir(), "temp_icon.bmp")
+        hbmp.SaveBitmapFile(hdc, temp_bmp)
+
+        img = Image.open(temp_bmp).convert("RGBA")
+        icon_path = get_unique_filename(base_name, ".ico", output_dir)
+
+        icon_sizes = [16, 24, 32, 48, 64, 128, 256]
+        img.save(icon_path, format='ICO', sizes=[(s, s) for s in icon_sizes])
+        return os.path.basename(icon_path)
+
+    else:
+        subprocess.run(["wrestool", "-x", "--type=14", "-o", output_dir, exe_path], check=True)
+        for f in os.listdir(output_dir):
+            if f.endswith(".ico"):
+                src_icon = os.path.join(output_dir, f)
+                dest_icon = get_unique_filename(base_name, ".ico", output_dir)
+                os.rename(src_icon, dest_icon)
+                return os.path.basename(dest_icon)
+        return None
 
 def extract_version_info(exe_path):
-    pe = pefile.PE(exe_path)
+    try:
+        pe = pefile.PE(exe_path)
+    except pefile.PEFormatError:
+        print("{exe_path} is not a valid PE file.")
+        return {}
     version_info = {}
-
     if hasattr(pe, 'FileInfo'):
         for fileinfo in pe.FileInfo:
             if isinstance(fileinfo, list):
@@ -93,12 +152,11 @@ def generate_rc_file(icon_name, version_info, rc_path):
         f.write('  END\n')
         f.write('END\n')
 
-# Main logic
 def main():
     ensure_pefile_installed()
 
     if len(sys.argv) != 2:
-        print("Usage: python extract_rc.py <file.exe>")
+        print("Usage: python metadata_extractor.py <file.exe>")
         return
 
     exe_path = sys.argv[1]
