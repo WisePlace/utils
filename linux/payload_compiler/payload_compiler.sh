@@ -285,15 +285,6 @@ if $USE_LOADER_MODE; then
   echo -e "${BLUE}${PREFIX} Assembling raw shellcode before encryption...${NC}"
   RAW_PAYLOAD="/tmp/raw_shellcode.bin"
 
-  RAW_LINK=""
-  TARGET_SOURCE="${SOURCE_FILE:-$INJECT_SOURCE}"
-  if grep -qi "WSA\|winsock" "$TARGET_SOURCE"; then
-    RAW_LINK="-lws2_32"
-    if [[ "$USE_LOADER_MODE" == false ]]; then
-      CMD+=("$RAW_LINK")
-    fi
-  fi
-
   if [[ -n "$SOURCE_FILE" ]]; then
     x86_64-w64-mingw32-gcc "$SOURCE_FILE" -static -c -o /tmp/shellcode.o \
       -nostdlib -fno-asynchronous-unwind-tables -fno-stack-protector -ffreestanding $RAW_LINK || {
@@ -354,6 +345,23 @@ for file in "${EXTRA_FILES[@]}"; do
     echo -e "${RED}${PREFIX} Extra file '$file' does not exist. Skipping.${NC}"
   fi
 done
+
+declare -A LIB_DEPS=(
+  ["WSAStartup|winsock|closesocket|inet_addr|htons"]="-lws2_32"
+  ["InternetOpen|InternetConnect|HttpOpenRequest"]="-lwininet"
+  ["RegOpenKey|RegSetValue|OpenProcessToken"]="-ladvapi32"
+  ["MessageBox|CreateWindow|SendMessage|ShowWindow"]="-luser32"
+  ["ShellExecute|SHGetFolderPath"]="-lshell32"
+  ["CryptAcquireContext|CryptGenKey|CryptEncrypt"]="-lcrypt32"
+)
+
+if [[ "$USE_LOADER_MODE" == false && -n "$SOURCE_FILE" ]]; then
+  for pattern in "${!LIB_DEPS[@]}"; do
+    if grep -qEi "$pattern" "$SOURCE_FILE"; then
+      CMD+=("${LIB_DEPS[$pattern]}")
+    fi
+  done
+fi
 
 CMD+=("-mwindows")
 CMD+=("-s")
