@@ -176,6 +176,10 @@ if $USE_HIDDEN; then
   CMD+=("-mwindows")
 fi
 
+if grep -qi "WSA\|winsock" "$SOURCE_FILE"; then
+  CMD+=("-lws2_32")
+fi
+
 CMD+=("-o" "$OUTPUT")
 
 echo -e "${BLUE}${PREFIX} Compiling payload as ${ARCH}-bit ${IS_CPP:+C++} binary...${NC}"
