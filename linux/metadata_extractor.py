@@ -161,7 +161,8 @@ def extract_version_info(exe_path):
 
 def generate_rc_file(icon_name, version_info, rc_path):
     with open(rc_path, 'w') as f:
-        f.write(f'IDI_ICON1 ICON "{icon_name}"\n\n')
+        if icon_name:
+            f.write(f'IDI_ICON1 ICON "{icon_name}"\n\n')
         f.write('1 VERSIONINFO\n')
         f.write('FILEVERSION {}\n'.format(
             ','.join(version_info.get("FileVersion", "0,0,0,0").split('.'))
@@ -206,8 +207,7 @@ def main():
     print("[*] Extracting icon...")
     icon_filename = extract_icon(exe_path, output_dir, base_name)
     if not icon_filename:
-        print("[!] Failed to extract icon.")
-        return
+        print("[!] No icon was extracted.")
 
     print("[*] Extracting version info...")
     version_info = extract_version_info(exe_path)
