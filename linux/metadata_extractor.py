@@ -207,7 +207,7 @@ def main():
     print("[*] Extracting icon...")
     icon_filename = extract_icon(exe_path, output_dir, base_name)
     if not icon_filename:
-        print("[!] Failed to extract icon. Continuing without icon...")
+        print("[!] Failed to extract icon.")
 
     print("[*] Extracting version info...")
     version_info = extract_version_info(exe_path)
