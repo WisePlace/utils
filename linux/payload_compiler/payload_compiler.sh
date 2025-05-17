@@ -64,7 +64,7 @@ check_dependencies
 
 cleanup_aes() {
   echo -e "${BLUE}${PREFIX} Cleaning temporary AES files...${NC}"
-  rm -f payload.enc "$AES_DIR"/payload_data.h /tmp/{raw_payload.exe,shellcode.o,raw_shellcode.bin}
+  rm -f payload.enc key_iv.h "$AES_DIR"/payload_data.h /tmp/{raw_payload.exe,shellcode.o,raw_shellcode.bin}
 }
 
 sign_payload() {
