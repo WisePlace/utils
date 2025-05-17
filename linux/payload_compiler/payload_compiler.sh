@@ -15,6 +15,7 @@ OUTPUT=""
 TYPE=""
 SOURCE_FILE=""
 INJECT_SOURCE=""
+CUSTOM_LOADER=""
 ARCH="64"
 USE_LOADER_MODE=false
 SIGN_PAYLOAD=false
@@ -36,6 +37,7 @@ show_help() {
   echo -e "  --add-file <file>   Add extra source file to the compilation"
   echo -e "  --sign              Sign the final executable using anonymous credentials"
   echo -e "  --obfuscate         Obfuscate the code and variable names before compilation"
+  echo -e "  --loader <file>     Use a custom loader instead of the one tied to --type"
   echo -e "  --list              Show available spoof types"
   echo -e "  -h, --help          Show this help message"
   echo -e "---------------------------------------"
@@ -173,6 +175,10 @@ while [[ $# -gt 0 ]]; do
       OBFUSCATE=true
       shift
       ;;
+    --loader)
+      CUSTOM_LOADER="$2"
+      shift 2
+      ;;
     --list)
       list_spoofers
       ;;
@@ -248,7 +254,19 @@ fi
 
 if $USE_LOADER_MODE; then
   AES_DIR="bin/aes"
-  LOADER_C="$AES_DIR/loaders/${TYPE}_loader.c"
+  if [[ -n "$CUSTOM_LOADER" ]]; then
+    if [[ ! -f "$CUSTOM_LOADER" ]]; then
+      echo -e "${RED}${PREFIX} Custom loader '$CUSTOM_LOADER' not found.${NC}"
+      exit 1
+    fi
+    LOADER_C="$CUSTOM_LOADER"
+  else
+    LOADER_C="$AES_DIR/loaders/${TYPE}_loader.c"
+    if [[ ! -f "$LOADER_C" ]]; then
+      echo -e "${RED}${PREFIX} AES loader '$LOADER_C' not found.${NC}"
+      exit 1
+    fi
+  fi
   if [[ ! -f "$LOADER_C" ]]; then
     echo -e "${RED}${PREFIX} AES loader '$LOADER_C' not found.${NC}"
     exit 1
