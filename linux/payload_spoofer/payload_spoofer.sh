@@ -27,7 +27,7 @@ show_help() {
   echo -e "  --type <name>      Required. Spoof type (must match files in icons/ and metadata/)"
   echo -e "  --output <name>    Optional. Output binary name (default: <type>.exe)"
   echo -e "  --hidden           Optional. Hide console window (adds -mwindows)"
-  echo -e "  --aes              Optional. Include /bin/aes.c during compilation"
+  echo -e "  --aes              Optional. Include aes.c during compilation"
   echo -e "  --add-file <file>  Optional. Add extra source file to compile"
   echo -e "  --list             Show available spoof types"
   echo -e "  -h, --help         Show this help message"
