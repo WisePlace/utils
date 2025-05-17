@@ -26,6 +26,20 @@ def ensure_pefile_installed():
             print("[!] Failed to install 'pefile'. Please install it manually.")
             sys.exit(1)
 
+def ensure_pillow_installed():
+    try:
+        global Image
+        from PIL import Image
+    except ImportError:
+        print("[*] 'Pillow' not found. Installing...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "Pillow"], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            from PIL import Image
+        except Exception:
+            print("[!] Failed to install 'Pillow'. Please install it manually: pip install Pillow")
+            sys.exit(1)
+            
 def check_icoutils():
     if platform.system() != "Linux":
         return
@@ -154,7 +168,8 @@ def generate_rc_file(icon_name, version_info, rc_path):
 
 def main():
     ensure_pefile_installed()
-
+    ensure_pillow_installed()
+    
     if len(sys.argv) != 2:
         print("Usage: python metadata_extractor.py <file.exe>")
         return
