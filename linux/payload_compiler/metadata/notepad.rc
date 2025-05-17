@@ -15,7 +15,7 @@ BEGIN
       VALUE "FileVersion", "10.0.19041.1"
       VALUE "InternalName", "notepad.exe"
       VALUE "OriginalFilename", "notepad.exe"
-      VALUE "ProductName", "Microsoft® Windows® Operating System"
+      VALUE "ProductName", "Microsoft Windows Operating System"
       VALUE "ProductVersion", "10.0.19041.1"
     END
   END
